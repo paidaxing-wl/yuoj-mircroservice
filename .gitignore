@@ -1,24 +1,39 @@
-# Compiled class file
+### 构建产物 ###
+target/
+build/
+out/
 *.class
-
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+!.mvn/wrapper/maven-wrapper.jar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+### IDE ###
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+*.swp
+*~
+
+### 本地环境与密钥（请勿提交） ###
+.env
+.env.local
+*.local.yml
+*.local.yaml
+application-local.yml
+application-local.yaml
+application-secret.yml
+
+### 日志与临时文件 ###
+*.log
+logs/
+
+### 操作系统 ###
+.DS_Store
+Thumbs.db
+desktop.ini
