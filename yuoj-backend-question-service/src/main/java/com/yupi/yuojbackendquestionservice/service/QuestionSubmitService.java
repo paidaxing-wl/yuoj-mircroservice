@@ -55,5 +55,15 @@ public interface QuestionSubmitService extends IService<QuestionSubmit> {
      */
     Page<QuestionSubmitVO> getQuestionSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser);
 
+    /**
+     * 状态原子更新（CAS），用于判题任务抢占，防重复消费
+     *
+     * @param questionSubmitId 提交 id
+     * @param expectStatus     期望的当前状态
+     * @param newStatus        要更新成的状态
+     * @return true 表示更新成功（抢占到了任务）
+     */
+    boolean compareAndSetStatus(long questionSubmitId, Integer expectStatus, Integer newStatus);
+
 }
 

@@ -43,4 +43,13 @@ public class QuestionInnerController implements QuestionFeignClient {
     public boolean updateQuestionSubmitById(@RequestBody QuestionSubmit questionSubmit){
         return questionSubmitService.updateById(questionSubmit);
     }
+
+    @Override
+    @PostMapping("/question_submit/compare_and_set")
+    public boolean compareAndSetStatus(@RequestParam("questionSubmitId") long questionSubmitId,
+                                       @RequestParam("expectStatus") Integer expectStatus,
+                                       @RequestParam("newStatus") Integer newStatus) {
+        // 返回受影响行数 > 0 才算抢占成功，这样调用方拿到的一定是"我改成功了"
+        return questionSubmitService.compareAndSetStatus(questionSubmitId, expectStatus, newStatus);
+    }
 }

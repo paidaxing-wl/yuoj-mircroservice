@@ -2,6 +2,7 @@ package com.yupi.yuojbackendquestionservice.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
@@ -25,8 +26,10 @@ import com.yupi.yuojbackmodel.model.enums.QuestionSubmitStatusEnum;
 import com.yupi.yuojbackmodel.model.vo.QuestionSubmitVO;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -38,6 +41,7 @@ import java.util.stream.Collectors;
 * @description 针对表【question_submit(题目提交)】的数据库操作Service实现
 * @createDate 2026-09-14 20:35:07
 */
+@Slf4j
 @Service
 public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper, QuestionSubmit>
     implements QuestionSubmitService {
@@ -64,6 +68,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
      * @return
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public long doQuestionSubmit(QuestionSubmitAddRequest questionSubmitAddRequest, User loginUser) {
 
         // 判断编程语言是否合法
@@ -98,13 +103,13 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         }
 
         Long questionSubmitId = questionSubmit.getId();
-        //发送消息
-        myMessageProducer.sendMessage("code_exchange","my_routingKey",String.valueOf(questionSubmitId));
-        // 执行判题服务
-//        CompletableFuture.runAsync(()->{
-//            judgeFeignClient.doJudge(questionSubmitId);
-//        });
-
+        try {
+            myMessageProducer.sendJudgeTask(questionSubmitId);
+        } catch (Exception e) {
+            // 发消息失败直接抛，让事务回滚，不留半个提交
+            log.error("提交 {} 的判题消息发送失败，本次提交事务回滚", questionSubmitId, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "判题任务提交失败，请稍后重试");
+        }
         return questionSubmitId;
     }
 
@@ -159,6 +164,17 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
 
         questionSubmitVOPage.setRecords(questionSubmitVOList);
         return questionSubmitVOPage;
+    }
+
+    @Override
+    public boolean compareAndSetStatus(long questionSubmitId, Integer expectStatus, Integer newStatus) {
+        // 状态判断放进 SQL 的 WHERE，由数据库保证原子性，避免"先查后改"的窗口期
+        LambdaUpdateWrapper<QuestionSubmit> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(QuestionSubmit::getId, questionSubmitId)
+                .eq(QuestionSubmit::getStatus, expectStatus)
+                .set(QuestionSubmit::getStatus, newStatus);
+        // 返回受影响行数：>0 才代表"我抢到了"
+        return this.update(updateWrapper);
     }
 
 }

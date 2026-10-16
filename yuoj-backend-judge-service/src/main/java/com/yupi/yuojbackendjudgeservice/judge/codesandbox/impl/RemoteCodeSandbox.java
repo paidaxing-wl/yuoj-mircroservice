@@ -1,40 +1,48 @@
-package com.yupi.yuojbackendjudgeservice.judge.codesandbox.impl;
+package com.yupi.yuojbackendjudgeservice.judge.codesandbox;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONUtil;
-import com.yupi.yuojbackendcommon.common.ErrorCode;
-import com.yupi.yuojbackendcommon.exception.BusinessException;
-import com.yupi.yuojbackendjudgeservice.judge.codesandbox.CodeSandBox;
 import com.yupi.yuojbackmodel.model.codesandbox.ExecuteCodeRequest;
 import com.yupi.yuojbackmodel.model.codesandbox.ExecuteCodeResponse;
-
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * 远程代码沙箱（实际调用的沙箱）
+ * 远程代码沙箱。网络异常与空响应统一抛 SandboxUnavailableException，由上层识别为可重试故障。
+ *
+ * @author lenovo
  */
+@Slf4j
 public class RemoteCodeSandbox implements CodeSandBox {
 
+    private final CodeSandboxProperties properties;
 
-    //定义鉴权请求头和密钥
-    private static final String AUTH_REQUEST_HEADER="auth";
-
-    public static final String AUTH_REQUEST_SECRET="secretKey";
-
+    public RemoteCodeSandbox(CodeSandboxProperties properties) {
+        this.properties = properties;
+    }
 
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
-        System.out.println("远程代码沙箱");
-        String url="http://localhost:8090/executeCode";
+        String url = properties.getRemoteUrl();
         String json = JSONUtil.toJsonStr(executeCodeRequest);
-        String responseStr = HttpUtil.createPost(url)
-                .header(AUTH_REQUEST_HEADER, AUTH_REQUEST_SECRET)
-                .body(json)
-                .execute()
-                .body();
-        if (StrUtil.isBlank(responseStr)) {
-            throw new BusinessException(ErrorCode.API_REQUEST_ERROR,"executeCode remoteSandbox error,message ="+responseStr);
+        String responseStr;
+        try {
+            responseStr = HttpUtil.createPost(url)
+                    .header(properties.getAuthHeader(), properties.getAuthSecret())
+                    .body(json)
+                    .timeout(properties.getHttpTimeoutMs())
+                    .execute()
+                    .body();
+        } catch (Exception e) {
+            throw new SandboxUnavailableException("调用远程代码沙箱失败，url=" + url, e);
         }
-        return JSONUtil.toBean(responseStr,ExecuteCodeResponse.class);
+        if (StrUtil.isBlank(responseStr)) {
+            throw new SandboxUnavailableException("远程代码沙箱返回空响应，url=" + url);
+        }
+        try {
+            return JSONUtil.toBean(responseStr, ExecuteCodeResponse.class);
+        } catch (Exception e) {
+            throw new SandboxUnavailableException("远程代码沙箱响应无法解析，url=" + url, e);
+        }
     }
 }
